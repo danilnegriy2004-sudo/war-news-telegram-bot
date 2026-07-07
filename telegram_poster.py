@@ -16,9 +16,10 @@ import time
 import hashlib
 import feedparser
 import requests
+from deep_translator import GoogleTranslator
 
 STATE_FILE = "state.json"
-MAX_POSTS_PER_RUN = 5
+MAX_POSTS_PER_RUN = 1
 SLEEP_BETWEEN_POSTS = 3  # секунды, чтобы не упереться в лимиты Telegram
 
 SOURCE_EMOJI = {
@@ -31,12 +32,12 @@ SOURCE_EMOJI = {
 }
 
 FEEDS = [
-    {"name": "BBC World", "url": "https://feeds.bbci.co.uk/news/world/rss.xml", "filter_keywords": True},
-    {"name": "The Guardian", "url": "https://www.theguardian.com/world/ukraine/rss", "filter_keywords": False},
-    {"name": "Google News", "url": "https://news.google.com/rss/search?q=Ukraine%20Russia%20war%20when:1d&hl=en-US&gl=US&ceid=US:en", "filter_keywords": False},
-    {"name": "BBC Russian", "url": "https://feeds.bbci.co.uk/russian/rss.xml", "filter_keywords": True},
-    {"name": "BBC Ukrainian", "url": "https://feeds.bbci.co.uk/ukrainian/rss.xml", "filter_keywords": True},
-    {"name": "Meduza (EN)", "url": "https://meduza.io/rss/en/all", "filter_keywords": True},
+    {"name": "BBC World", "url": "https://feeds.bbci.co.uk/news/world/rss.xml", "filter_keywords": True, "lang": "en"},
+    {"name": "The Guardian", "url": "https://www.theguardian.com/world/ukraine/rss", "filter_keywords": False, "lang": "en"},
+    {"name": "Google News", "url": "https://news.google.com/rss/search?q=Ukraine%20Russia%20war%20when:1d&hl=en-US&gl=US&ceid=US:en", "filter_keywords": False, "lang": "en"},
+    {"name": "BBC Russian", "url": "https://feeds.bbci.co.uk/russian/rss.xml", "filter_keywords": True, "lang": "ru"},
+    {"name": "BBC Ukrainian", "url": "https://feeds.bbci.co.uk/ukrainian/rss.xml", "filter_keywords": True, "lang": "uk"},
+    {"name": "Meduza (EN)", "url": "https://meduza.io/rss/en/all", "filter_keywords": True, "lang": "en"},
 ]
 
 KEYWORDS = [
@@ -95,10 +96,15 @@ def get_image_url(entry):
     return None
 
 
-def strip_html(raw: str) -> str:
-    import re
-    text = re.sub(r"<[^>]+>", "", raw or "")
-    return " ".join(text.split())
+def translate_to_ukrainian(text: str, source_lang: str) -> str:
+    """Переводит текст на украинский. Если перевод не удался — возвращает оригинал."""
+    if not text or source_lang == "uk":
+        return text
+    try:
+        return GoogleTranslator(source=source_lang, target="uk").translate(text)
+    except Exception as e:
+        print(f"[warn] Перевод не удался: {e}")
+        return text
 
 
 def fetch_all_items():
@@ -118,14 +124,24 @@ def fetch_all_items():
                 continue
             if feed["filter_keywords"] and not matches_keywords(title + " " + summary):
                 continue
+
+            lang = feed.get("lang", "en")
+            clean_summary = strip_html(summary)[:300]
+
             items.append({
                 "source": feed["name"],
-                "title": title,
+                "title": translate_to_ukrainian(title, lang),
                 "link": link,
-                "summary": strip_html(summary)[:300],
+                "summary": translate_to_ukrainian(clean_summary, lang),
                 "image": get_image_url(entry),
             })
     return items
+
+
+def strip_html(raw: str) -> str:
+    import re
+    text = re.sub(r"<[^>]+>", "", raw or "")
+    return " ".join(text.split())
 
 
 CHANNEL_NAME = "Українські News"
