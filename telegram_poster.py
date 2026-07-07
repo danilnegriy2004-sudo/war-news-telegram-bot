@@ -18,8 +18,17 @@ import feedparser
 import requests
 
 STATE_FILE = "state.json"
-MAX_POSTS_PER_RUN = 15
-SLEEP_BETWEEN_POSTS = 2  # секунды, чтобы не упереться в лимиты Telegram
+MAX_POSTS_PER_RUN = 5
+SLEEP_BETWEEN_POSTS = 3  # секунды, чтобы не упереться в лимиты Telegram
+
+SOURCE_EMOJI = {
+    "BBC World": "🌍",
+    "The Guardian": "🗞",
+    "Google News": "📡",
+    "BBC Russian": "🇷🇺",
+    "BBC Ukrainian": "🇺🇦",
+    "Meduza (EN)": "📰",
+}
 
 FEEDS = [
     {"name": "BBC World", "url": "https://feeds.bbci.co.uk/news/world/rss.xml", "filter_keywords": True},
@@ -61,6 +70,37 @@ def save_state(posted_hashes):
         json.dump(sorted(posted_hashes), f, ensure_ascii=False, indent=2)
 
 
+def get_image_url(entry):
+    """Пытается найти картинку в записи RSS (media:thumbnail, media:content, enclosure)."""
+    media_thumb = entry.get("media_thumbnail")
+    if media_thumb:
+        url = media_thumb[0].get("url")
+        if url:
+            return url
+
+    media_content = entry.get("media_content")
+    if media_content:
+        for m in media_content:
+            url = m.get("url")
+            medium = m.get("medium", "")
+            if url and (medium == "image" or url.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))):
+                return url
+
+    for enc in entry.get("enclosures", []):
+        etype = enc.get("type", "")
+        url = enc.get("href") or enc.get("url")
+        if url and etype.startswith("image"):
+            return url
+
+    return None
+
+
+def strip_html(raw: str) -> str:
+    import re
+    text = re.sub(r"<[^>]+>", "", raw or "")
+    return " ".join(text.split())
+
+
 def fetch_all_items():
     items = []
     for feed in FEEDS:
@@ -82,16 +122,45 @@ def fetch_all_items():
                 "source": feed["name"],
                 "title": title,
                 "link": link,
+                "summary": strip_html(summary)[:300],
+                "image": get_image_url(entry),
             })
     return items
 
 
+CHANNEL_NAME = "Українські News"
+CHANNEL_LINK = "https://t.me/ukrainenews68"
+
+
+def build_caption(item: dict) -> str:
+    parts = [f"❗ <b>{item['title']}</b>"]
+    if item.get("summary"):
+        parts.append(item["summary"])
+    parts.append(f"<a href=\"{CHANNEL_LINK}\">{CHANNEL_NAME}</a>")
+    return "\n\n".join(parts)
+
+
 def send_to_telegram(bot_token: str, chat_id: str, item: dict):
-    text = f"<b>{item['source']}</b>\n{item['title']}\n{item['link']}"
+    caption = build_caption(item)
+
+    if item.get("image"):
+        # Caption у фото ограничен 1024 символами — на всякий случай подрежем
+        safe_caption = caption if len(caption) <= 1024 else caption[:1000] + "…"
+        url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+        resp = requests.post(url, data={
+            "chat_id": chat_id,
+            "photo": item["image"],
+            "caption": safe_caption,
+            "parse_mode": "HTML",
+        }, timeout=20)
+        if resp.ok:
+            return True
+        print(f"[warn] sendPhoto не удался ({resp.status_code}: {resp.text[:200]}), пробуем как текст")
+
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     resp = requests.post(url, data={
         "chat_id": chat_id,
-        "text": text,
+        "text": caption,
         "parse_mode": "HTML",
         "disable_web_page_preview": "false",
     }, timeout=20)
@@ -124,6 +193,8 @@ def main():
             ok = send_to_telegram(bot_token, chat_id, item)
             if ok:
                 print(f"[ok] Отправлено: {item['title'][:70]}")
+                state.add(link_hash(item["link"]))
+                save_state(state)  # сохраняем сразу, чтобы прерывание не привело к повтору
             time.sleep(SLEEP_BETWEEN_POSTS)
 
     # В состояние записываем ВСЕ увиденные материалы (даже те, что не отправляли из-за лимита),
