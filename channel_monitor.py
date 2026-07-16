@@ -42,9 +42,8 @@ def send_to_telegram(text: str):
 
 def build_caption(original_text: str) -> str:
     lines = [
-        "🔴 <b>Загроза балістики</b> (за даними Повітряних Сил ЗСУ)",
+        "⚠️⚠️ <b>УВАГА! Балістика!</b>",
         original_text.strip(),
-        f"<a href=\"{CHANNEL_LINK}\">{CHANNEL_NAME}</a>",
     ]
     return "\n\n".join(lines)
 
