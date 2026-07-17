@@ -25,7 +25,7 @@ CATEGORIES = {
         "cooldown_seconds": 0,
     },
     "shahed": {
-        "keywords": ["шахед", "shahed", "гербер", "італмас"],
+        "keywords": ["шахед", "shahed", "гербер", "італмас", "бпла"],
         "header": "🛩️ <b>Атака дронами (Shahed)</b>",
         "cooldown_seconds": 60 * 60,
     },
