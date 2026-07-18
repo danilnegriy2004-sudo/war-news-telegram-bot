@@ -1,11 +1,14 @@
 """
 Мониторинг официального Telegram-канала Повітряних Сил ЗСУ (@kpszsu) в реальном
-времени и пересылка в свой канал сообщений про баллистику и шахеды.
+времени и пересылка в свой канал сообщений про баллистику и шахеды, с красивым
+оформлением (blockquote, время по Києву).
 """
 
 import os
 import time
 import requests
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 
@@ -17,16 +20,19 @@ BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 SOURCE_CHANNEL = os.environ.get("SOURCE_CHANNEL", "kpszsu")
+KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 CATEGORIES = {
     "ballistic": {
         "keywords": ["балістик", "балістичн", "аеробалістичн", "орєшник", "кинджал"],
-        "header": "⚠️⚠️ <b>УВАГА! Балістика!</b>",
+        "icon": "🚨",
+        "title": "БАЛІСТИЧНА ЗАГРОЗА",
         "cooldown_seconds": 0,
     },
     "shahed": {
         "keywords": ["шахед", "shahed", "гербер", "італмас", "бпла"],
-        "header": "🛩️ <b>Атака дронами (Shahed)</b>",
+        "icon": "🛩️",
+        "title": "АТАКА БПЛА",
         "cooldown_seconds": 60 * 60,
     },
 }
@@ -49,9 +55,15 @@ def send_to_telegram(text: str):
     return resp.ok
 
 
-def build_caption(header: str, original_text: str) -> str:
-    lines = [header, original_text.strip()]
-    return "\n\n".join(lines)
+def build_caption(icon: str, title: str, original_text: str) -> str:
+    now_str = datetime.now(KYIV_TZ).strftime("%H:%M")
+    lines = [
+        f"{icon} <b>{title}</b> {icon}",
+        "▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️",
+        f"<blockquote>{original_text.strip()}</blockquote>",
+        f"📡 Повітряні сили ЗСУ  •  🕐 {now_str}",
+    ]
+    return "\n".join(lines)
 
 
 @client.on(events.NewMessage(chats=SOURCE_CHANNEL))
@@ -72,7 +84,7 @@ async def handler(event):
                 print(f"[cooldown] '{name}' пропущено, ще {remaining}с паузи")
                 continue
 
-            caption = build_caption(cfg["header"], text)
+            caption = build_caption(cfg["icon"], cfg["title"], text)
             ok = send_to_telegram(caption)
             last_sent_at[name] = now
             print(f"[{'ok' if ok else 'FAIL'}] Переслано повідомлення категорії '{name}'")
