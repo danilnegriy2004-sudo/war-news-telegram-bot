@@ -88,7 +88,7 @@ def send_to_telegram(text: str):
 
 
 def build_ballistic_caption(original_text: str) -> str:
-    icon = emoji_tag("⚠️", EMOJI_ID_BALLISTIC)
+    icon = emoji_tag("⚡", EMOJI_ID_BALLISTIC)
     lines = [
         f"{icon} <b>БАЛІСТИЧНА ЗАГРОЗА</b>",
         "⬛⬛⬛⬛⬛⬛⬛⬛",
@@ -101,7 +101,7 @@ def build_ballistic_caption(original_text: str) -> str:
 
 
 def build_kab_batch_caption(items: list) -> str:
-    icon = emoji_tag("🛩️", EMOJI_ID_KAB)
+    icon = emoji_tag("✈️", EMOJI_ID_KAB)
     now_str = datetime.now(KYIV_TZ).strftime("%H:%M")
     lines = [
         f"{icon} <b>ЗВЕДЕННЯ ЗА 2 ГОДИНИ</b> {icon}",
